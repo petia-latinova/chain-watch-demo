@@ -1,0 +1,25 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      target: dev
+    environment:
+      DB_HOST: db
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      PORT: ${PORT}
+      NODE_ENV: development
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: sh ./entrypoint.sh
+    depends_on:
+      - db
+    networks:
+      - app-network
