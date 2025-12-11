@@ -9,6 +9,8 @@ services:
       POSTGRES_DB: ${DB_NAME}
     volumes:
       - db-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
     networks:
       - app-network
     healthcheck:
@@ -32,8 +34,7 @@ services:
       - db
       - redis
     environment:
-      - RPC_URL=${RPC_URL}
-      - ETHERS_BATCH_SIZE=${ETHERS_BATCH_SIZE}
+      - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
     networks:
       - app-network
 

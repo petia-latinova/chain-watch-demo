@@ -15,11 +15,11 @@ PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -c "CREATE DATABASE \
 echo "Starting app..."
 if [ "$NODE_ENV" = "production" ]; then
   # Run migrations based on environment or explicit flag
-  npm run migration:run:prod
+  yarn run migration:run:prod
   node dist/main.js
 else
   # Run migrations based on environment or explicit flag
-  npm run migration:run
+  yarn run migration:run
   # Use ts-node for development
   npx ts-node -r tsconfig-paths/register src/main.ts
 fi

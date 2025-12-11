@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install all dependencies including dev
 COPY package*.json ./
-RUN npm install
+RUN yarn install
 
 # Copy source code and make entrypoint executable
 COPY . .
@@ -26,13 +26,13 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install --production=false
+RUN yarn install --production=false
 
 # Copy source code
 COPY . .
 
 # Build TypeScript for production
-RUN npm run build
+RUN yarn run build
 
 # Stage 2: Production runtime
 FROM node:20-alpine AS prod
@@ -44,7 +44,7 @@ WORKDIR /app
 
 # Copy only necessary files
 COPY package*.json ./
-RUN npm install --production
+RUN yarn install --production
 
 # Copy built application and migrations
 COPY --from=build /app/dist ./dist

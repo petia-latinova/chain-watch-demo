@@ -12,6 +12,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       PORT: ${PORT}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL}
       NODE_ENV: production
     ports:
       - '3000:3000'

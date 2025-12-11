@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
-import { TransferService } from './transfer.service';
-import { TransferController } from './transfer.controller';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Transfer } from './entities/transfer.entity';
 
 @Module({
-  controllers: [TransferController],
-  providers: [TransferService],
+  imports: [
+    // This makes the Transfer entity available for injection (via @InjectRepository)
+    TypeOrmModule.forFeature([Transfer]),
+  ],
+  // Exporting TypeOrmModule makes it available to other modules that import TransferModule
+  exports: [TypeOrmModule.forFeature([Transfer])], 
 })
 export class TransferModule {}

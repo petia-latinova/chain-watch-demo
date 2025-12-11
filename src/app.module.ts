@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { TransferModule } from './transfer/transfer.module';
+import { HistoryModule } from './history/history.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TransferModule } from './transfer/transfer.module';
     }),
     WebhooksModule,
     TransferModule,
+    HistoryModule,
   ],
   controllers: [],
   providers: [],
