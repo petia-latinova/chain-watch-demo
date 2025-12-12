@@ -4,7 +4,16 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Set the global prefix for all routes (e.g., /api/history/transactions)
   app.setGlobalPrefix('api');
+
+  // Enable CORS to allow the React frontend to communicate with the backend
+  app.enableCors({
+    // Allow requests only from your local React development server
+    origin: 'http://localhost:5173',
+    methods: 'GET,HEAD,POST,OPTIONS',
+    credentials: true,
+  });
   
   const port = process.env.PORT || 3000;
 

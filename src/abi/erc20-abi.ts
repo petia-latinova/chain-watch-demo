@@ -1,4 +1,3 @@
-// Minimal ABI required for the Web3 calls (Viem standard)
 export const ERC20_ABI = [
   {
     "inputs": [],
@@ -6,7 +5,6 @@ export const ERC20_ABI = [
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
         "type": "uint256"
       }
     ],
@@ -19,7 +17,6 @@ export const ERC20_ABI = [
     "outputs": [
       {
         "internalType": "uint8",
-        "name": "",
         "type": "uint8"
       }
     ],
@@ -32,7 +29,6 @@ export const ERC20_ABI = [
     "outputs": [
       {
         "internalType": "string",
-        "name": "",
         "type": "string"
       }
     ],

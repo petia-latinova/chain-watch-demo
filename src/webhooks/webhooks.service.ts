@@ -11,8 +11,8 @@ const TOKEN_CONFIG = {
   '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238': { symbol: 'USDC', decimals: 6 },
   // Sepolia EURC:
   '0x08210f9170f89ab7658f0b5e3ff39b0e03c594d4': { symbol: 'EURC', decimals: 6 },
-  // CUSTOM TOKEN ADDRESS WILL BE ADDED HERE LATER:
-  // e.g., '0x...': { symbol: 'CW-ERC20', decimals: 18 } 
+  // Sepolia CW-ERC20:
+  '0xc2c9a6d4c2699349f69de33df8ed8a90db908944': { symbol: 'CW-ERC20', decimals: 18 },
 };
 
 // Minimal ERC20 Transfer ABI for decoding the log
