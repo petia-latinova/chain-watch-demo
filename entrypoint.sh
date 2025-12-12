@@ -1,10 +1,17 @@
 #!/bin/sh
 set -e
 
-# Wait for DB
-echo "Waiting for database..."
-until nc -z $DB_HOST $DB_PORT; do
-  echo "Database not ready, waiting..."
+# Use pg_isready to wait until DB is ready for queries
+DB_HOST=$DB_HOST
+DB_PORT=$DB_PORT
+DB_USER=$DB_USER
+DB_NAME=$DB_NAME
+
+echo "Waiting for PostgreSQL to be fully ready..."
+
+# Loop until pg_isready returns 0 (ready for connections)
+until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"; do
+  echo "Database not ready, waiting 2 seconds..."
   sleep 2
 done
 echo "Database ready ✅"

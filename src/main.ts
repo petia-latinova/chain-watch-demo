@@ -1,17 +1,22 @@
+// src/main.ts (NestJS Backend)
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Set the global prefix for all routes (e.g., /api/history/transactions)
   app.setGlobalPrefix('api');
 
-  // Enable CORS to allow the React frontend to communicate with the backend
+  const allowedOrigins = [
+    'http://localhost:5173', // Your React Frontend local dev server
+    'https://unallied-viscerally-rebecka.ngrok-free.dev', // YOUR NGROK PUBLIC URL
+  ];
+
   app.enableCors({
-    // Allow requests only from your local React development server
-    origin: 'http://localhost:5173',
-    methods: 'GET,HEAD,POST,OPTIONS',
+    origin: allowedOrigins,
+    // Ensure OPTIONS, GET, and POST (for the transfer form) are all allowed.
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
   

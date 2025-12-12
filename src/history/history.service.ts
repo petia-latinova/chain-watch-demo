@@ -17,8 +17,6 @@ export class HistoryService {
     @InjectRepository(Transfer)
     private transfersRepository: Repository<Transfer>,
   ) {
-    // Initialize Viem Public Client for Sepolia RPC (requires ENV variable)
-    // NOTE: You must define SEPOLIA_RPC_URL in your .env file
     const sepoliaRpcUrl = process.env.SEPOLIA_RPC_URL;
     if (!sepoliaRpcUrl) {
       this.logger.error("SEPOLIA_RPC_URL not configured. Web3 calls will fail.");
@@ -37,7 +35,7 @@ export class HistoryService {
 
     // Build the WHERE clause dynamically
     const where: any = {};
-    if (symbol) where.symbol = symbol;
+    if (symbol) where.symbol = symbol.toLowerCase();
     if (sender) where.sender = sender.toLowerCase();
     if (receiver) where.receiver = receiver.toLowerCase();
     
@@ -80,7 +78,13 @@ export class HistoryService {
     });
 
     if (!transferRecord) {
-      throw new NotFoundException(`No transaction history found for contract address: ${address}`);
+      return {
+        contractAddress: address,
+        tokenSymbol: 'UNKWN',
+        tokenDecimals: 18,
+        totalSupply: 'N/A',
+        note: `No history data found in DB for this contract address.`,
+      };
     }
 
     const { symbol, decimals } = transferRecord;
@@ -105,7 +109,7 @@ export class HistoryService {
       }
 
       // Parse the raw total supply using the fetched decimals
-      // The 'result' is now guaranteed to be a bigint
+      // The 'result' is guaranteed to be a bigint
       const totalSupplyParsed = formatUnits(totalSupplyResponse.result as bigint, decimals); 
 
       return {
