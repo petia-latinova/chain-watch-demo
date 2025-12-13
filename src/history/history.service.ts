@@ -30,41 +30,54 @@ export class HistoryService {
 
   // Transaction History Endpoint
   async getTransactionHistory(filters: TransactionFilterDto) {
-    const { page, limit, symbol, sender, receiver, startTime, endTime } = filters;
-    const skip = (page - 1) * limit;
+  const { page, limit, symbol, sender, receiver, startTime, endTime } = filters;
+  const skip = (page - 1) * limit;
 
-    // Build the WHERE clause dynamically
-    const where: any = {};
-    if (symbol) where.symbol = symbol.toLowerCase();
-    if (sender) where.sender = sender.toLowerCase();
-    if (receiver) where.receiver = receiver.toLowerCase();
-    
-    if (startTime && endTime) {
-      // Uses the standard TypeORM 'Between' operator
-      where.timestamp = Between(new Date(startTime), new Date(endTime));
-    } else if (startTime) {
-      // Uses the explicit MoreThanOrEqual function for $gte
-      where.timestamp = MoreThanOrEqual(new Date(startTime)); 
-    } else if (endTime) {
-      // Uses the explicit LessThanOrEqual function for $lte
-      where.timestamp = LessThanOrEqual(new Date(endTime)); 
-    }
+  // Base conditions (AND-ed)
+  const baseWhere: any = {};
 
-    const [transfers, total] = await this.transfersRepository.findAndCount({
-      where,
-      order: { timestamp: 'DESC' },
-      skip: skip,
-      take: limit,
-    });
+  if (symbol) baseWhere.symbol = symbol;
 
-    return {
-      transfers,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+  if (startTime && endTime) {
+    baseWhere.timestamp = Between(new Date(startTime), new Date(endTime));
+  } else if (startTime) {
+    baseWhere.timestamp = MoreThanOrEqual(new Date(startTime));
+  } else if (endTime) {
+    baseWhere.timestamp = LessThanOrEqual(new Date(endTime));
   }
+
+  let where: any;
+
+  // OR logic for sender / receiver
+  if (sender && receiver) {
+    where = [
+      { ...baseWhere, sender: sender.toLowerCase() },
+      { ...baseWhere, receiver: receiver.toLowerCase() },
+    ];
+  } else if (sender) {
+    where = { ...baseWhere, sender: sender.toLowerCase() };
+  } else if (receiver) {
+    where = { ...baseWhere, receiver: receiver.toLowerCase() };
+  } else {
+    where = baseWhere;
+  }
+
+  const [transfers, total] = await this.transfersRepository.findAndCount({
+    where,
+    order: { timestamp: 'DESC' },
+    skip,
+    take: limit,
+  });
+
+  return {
+    transfers,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
 
   // Token Metadata Endpoint
   async getTokenMetadata(filters: TokenMetadataFilterDto) {

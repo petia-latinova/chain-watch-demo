@@ -3,98 +3,182 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Transfer } from '../transfer/entities/transfer.entity';
 import { AlchemyWebhookDto } from './dto/alchemy-webhook.dto';
-import { formatUnits, hexToBigInt, decodeEventLog, parseAbi, Address } from 'viem';
+import {
+  formatUnits,
+  decodeEventLog,
+  parseAbi,
+  Address,
+  createWalletClient,
+  createPublicClient,
+  http,
+  WalletClient,
+  PublicClient,
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { sepolia } from 'viem/chains';
+import { ERC20_ABI } from '../abi/erc20-abi';
+import { ConfigService } from '@nestjs/config';
 
-// Define the Sepolia contract addresses and their known details
-const TOKEN_CONFIG = {
-  // Sepolia USDC:
+// Token configuration
+const TOKEN_CONFIG: Record<string, { symbol: string; decimals: number }> = {
   '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238': { symbol: 'USDC', decimals: 6 },
-  // Sepolia EURC:
   '0x08210f9170f89ab7658f0b5e3ff39b0e03c594d4': { symbol: 'EURC', decimals: 6 },
-  // Sepolia CW-ERC20:
   '0xc2c9a6d4c2699349f69de33df8ed8a90db908944': { symbol: 'CW-ERC20', decimals: 18 },
 };
 
-// Minimal ERC20 Transfer ABI for decoding the log
+const USDC_ADDRESS =
+  '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238' as Address;
+
+const CW_ERC20_ADDRESS =
+  '0xc2c9a6d4c2699349f69de33df8ed8a90db908944' as Address;
+
+const MINT_TOKEN_DECIMALS = 18;
+const MINT_MULTIPLIER = 10n;
+
+// Minimal ERC20 Transfer ABI
 const ERC20_TRANSFER_ABI = parseAbi([
-  'event Transfer(address indexed from, address indexed to, uint256 value)'
+  'event Transfer(address indexed from, address indexed to, uint256 value)',
 ]);
 
 @Injectable()
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
 
+  private publicClient: PublicClient;
+  private walletClient: WalletClient;
+  private serviceWalletAddress: Address;
+
   constructor(
     @InjectRepository(Transfer)
-    private transfersRepository: Repository<Transfer>,
-  ) {}
+    private readonly transfersRepository: Repository<Transfer>,
+    private readonly configService: ConfigService,
+  ) {
+    // Configuration and validation
+
+    const publicRpc = this.configService.get<string>('SEPOLIA_RPC_URL');
+    const txRpc = this.configService.get<string>(
+      'SERVICE_WALLET_TRANSACTION_RPC',
+    );
+    const privateKey = this.configService.get<string>(
+      'SERVICE_WALLET_PRIVATE_KEY',
+    );
+
+    if (!publicRpc || !txRpc || !privateKey) {
+      throw new Error(
+        'Missing SEPOLIA_RPC_URL, SERVICE_WALLET_TRANSACTION_RPC, or SERVICE_WALLET_PRIVATE_KEY',
+      );
+    }
+    // Wallet initialization (LOCAL SIGNING)
+    const cleanKey = privateKey.startsWith('0x')
+      ? privateKey
+      : `0x${privateKey}`;
+
+    const account = privateKeyToAccount(cleanKey as `0x${string}`);
+    this.serviceWalletAddress = account.address;
+
+    this.publicClient = createPublicClient({
+      chain: sepolia,
+      transport: http(publicRpc),
+    });
+
+    this.walletClient = createWalletClient({
+      account,
+      chain: sepolia,
+      transport: http(txRpc),
+    });
+
+    this.logger.log(`Service wallet initialized: ${account.address}`);
+  }
 
   async handleAlchemyWebhook(payload: AlchemyWebhookDto): Promise<void> {
-    // Access the GraphQL payload structure
-    const logsToProcess = payload.event.data.block.logs;
+    const logs = payload.event.data.block.logs;
 
-    this.logger.log(`Received webhook ID ${payload.id} with ${logsToProcess.length} logs to process.`);
+    this.logger.log(`Received ${logs.length} logs`);
 
-    // Process each log entry received in the single webhook payload
-    for (const log of logsToProcess) {
-      // Extract data from the new nested structure:
+    for (const log of logs) {
       const contractAddress = log.account.address.toLowerCase() as Address;
-      const transactionHash = log.transaction.hash;
       const tokenInfo = TOKEN_CONFIG[contractAddress];
+      if (!tokenInfo) continue;
 
-      if (!tokenInfo) {
-        this.logger.warn(`Ignoring transfer from unknown contract: ${contractAddress}`);
-        continue;
-      }
+      const txHash = log.transaction.hash;
 
-      // Check for duplicates before expensive decoding (prevents double-entry from webhook retries)
-      const existingTransfer = await this.transfersRepository.findOneBy({
-          transactionHash: transactionHash,
+      const exists = await this.transfersRepository.findOneBy({
+        transactionHash: txHash,
       });
+      if (exists) continue;
 
-      if (existingTransfer) {
-          this.logger.warn(`Duplicate transaction hash skipped: ${transactionHash}`);
-          continue;
-      }
-
-      // Start Processing Log
       try {
-        // Decode the log data using viem's utilities
-        const decodedEvent = decodeEventLog({
+        const decoded = decodeEventLog({
           abi: ERC20_TRANSFER_ABI,
-          data: log.data as `0x${string}`, // Requires 'data' field from Alchemy
+          data: log.data as `0x${string}`,
           topics: log.topics as [`0x${string}`, ...`0x${string}`[]],
         });
 
-        const from = decodedEvent.args.from.toLowerCase();
-        const to = decodedEvent.args.to.toLowerCase();
-        const rawValue = decodedEvent.args.value; // BigInt value
+        const sender = decoded.args.from.toLowerCase() as Address;
+        const receiver = decoded.args.to.toLowerCase() as Address;
+        const rawValue = decoded.args.value;
 
-        // Format Amount and Timestamp
-        const parsedAmount = formatUnits(rawValue, tokenInfo.decimals);
-
-        // NOTE: The Alchemy GraphQL payload does not provide a timestamp for the log.
-        // We use the webhook's creation time as a reliable fallback.
+        const amount = formatUnits(rawValue, tokenInfo.decimals);
         const timestamp = new Date(payload.createdAt);
 
-        // Create and Save the Transfer Entity
-        const newTransfer = this.transfersRepository.create({
-          contractAddress,
-          sender: from,
-          receiver: to,
-          amount: parsedAmount,
-          symbol: tokenInfo.symbol,
-          decimals: tokenInfo.decimals,
-          timestamp: timestamp,
-          transactionHash: transactionHash,
-        });
+        await this.transfersRepository.save(
+          this.transfersRepository.create({
+            contractAddress,
+            sender,
+            receiver,
+            amount,
+            symbol: tokenInfo.symbol,
+            decimals: tokenInfo.decimals,
+            timestamp,
+            transactionHash: txHash,
+          }),
+        );
 
-        await this.transfersRepository.save(newTransfer);
-        this.logger.log(`Saved transfer: ${parsedAmount} ${tokenInfo.symbol} in TX ${transactionHash}`);
+        this.logger.log(
+          `Saved ${amount} ${tokenInfo.symbol} (${txHash})`,
+        );
+        if (
+          contractAddress.toLowerCase() === USDC_ADDRESS.toLowerCase() &&
+          receiver.toLowerCase() === this.serviceWalletAddress.toLowerCase()
+        ) {
+          const scaled =
+            rawValue *
+            10n ** BigInt(MINT_TOKEN_DECIMALS - tokenInfo.decimals);
 
-      } catch (error) {
-        // This will catch errors if log.data is missing or decoding fails
-        this.logger.error(`Error processing log for TX ${transactionHash}. Payload issue or decoding error: ${error.message}`);
+          const mintAmount = scaled * MINT_MULTIPLIER;
+
+          this.logger.log(
+            `Minting ${mintAmount} CW-ERC20 to ${sender}`,
+          );
+
+          const mintHash = await this.walletClient.writeContract({
+            chain: sepolia,
+            account: this.walletClient.account!,
+            address: CW_ERC20_ADDRESS,
+            abi: ERC20_ABI,
+            functionName: 'mint',
+            args: [this.serviceWalletAddress, mintAmount],
+          });
+          await this.publicClient.waitForTransactionReceipt({
+            hash: mintHash,
+          });
+
+          const transferHash = await this.walletClient.writeContract({
+            chain: sepolia,
+            account: this.walletClient.account!,
+            address: CW_ERC20_ADDRESS,
+            abi: ERC20_ABI,
+            functionName: 'transfer',
+            args: [sender, mintAmount],
+          });
+          this.logger.log(
+            `Swap completed. Mint TX: ${mintHash}, Transfer TX: ${transferHash}`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Failed processing tx ${txHash}: ${err.message}`,
+        );
       }
     }
   }
